@@ -1,0 +1,88 @@
+import cv2
+import numpy as np
+import face_recognition
+import os
+from datetime import datetime
+#step 1 ->Load the image
+#step2  ->encode the image
+#step3  ->compare image with opencv
+
+#instead of loading each file manually we used a for loop here
+#to load a image we can alos use cv2 library-->cv2.imread
+
+path="MinorPImages"
+loadedimages=[]
+imagesFirstName=[]
+myAllPathFileListInAP=os.listdir(path) #list of all files present inside path folder
+
+for cl in myAllPathFileListInAP:
+    fullpath="E:\{}\{}".format(path,cl)
+    currImgLoad=cv2.imread(fullpath)#needs full path ,it loads image
+    loadedimages.append(currImgLoad)#store all loaded image in array
+    imagesFirstName.append(cl.split(".")[0])#delete.jpg extension
+
+def FindEncodings(images):
+    encodeList=[]
+    for img in images:
+        img=cv2.cvtColor(img,cv2.COLOR_BGR2RGB) #convert BGR image to RGB
+        face_encoding=face_recognition.face_encodings(img)[0] #returns array  -->[[en,en,...128]] -->that's why doing [0]
+        encodeList.append(face_encoding)
+    return encodeList
+
+def markAttandance(name):
+    with open('Attandance.csv','r+') as f:
+        myList=f.readlines()
+        nameList=[]
+        for line in myList:
+            entry=line.split(',')
+            nameList.append(entry[0])
+        if name not in nameList:
+            now=datetime.now()
+            dtString=now.strftime('%H:%M:%S')
+            f.writelines(f'\n{name},{dtString}')
+
+
+encodeListKnown=FindEncodings(loadedimages);
+
+cap=cv2.VideoCapture(0)
+print(cap)
+
+while True:
+    success,img=cap.read()
+    imgS=cv2.resize(img,(0,0),None,0.25,0.25)#doing the iamge 1/4th of it's orginal size , for better detection
+    imgS=cv2.cvtColor(imgS,cv2.COLOR_BGR2RGB)
+    faceCurrFrame=face_recognition.face_locations(imgS) #multiple faces can be detected in images
+    encodeCurrFrames=face_recognition.face_encodings(imgS) # list will be returned , as it will contains encodings of each face detected [[..128],[..128]]
+    #concept is to compare the encodings of encodings of images we have (encodedListKnown) with the encoding of face we detected one by one
+    for eachEncodeFaceWeDetected,eachFaceLocation in zip(encodeCurrFrames,faceCurrFrame):
+        matchesOrNotList=face_recognition.compare_faces(encodeListKnown,eachEncodeFaceWeDetected) #(known codings , to check Img encoding)
+        faceDis=face_recognition.face_distance(encodeListKnown,eachEncodeFaceWeDetected)
+        print(faceDis)
+        mostMatchedknownPersonIdx=np.argmin(faceDis)
+
+        if matchesOrNotList[mostMatchedknownPersonIdx]:
+            name=imagesFirstName[mostMatchedknownPersonIdx].upper()
+            #To show a rectangle over detected matched orignal image
+            #we will make the dimensions *4 , as perviously was divided by 4
+            top, right, bottom, left = eachFaceLocation
+            top,right,bottom,left=top*4,right*4,bottom*4,left*4
+
+            start_point = (top, left)
+            end_point = (bottom, right)
+            color = (255, 0, 255)
+            thickness = 2
+            # img--> orignal image
+            #showing rectangle over orginal image
+            cv2.rectangle(img, start_point, end_point, color, thickness)
+            cv2.putText(img,name,(right+6,bottom+6),cv2.FONT_HERSHEY_COMPLEX,1,(255,255,255),2)
+            markAttandance(name)
+
+        print("Next face comparison in loop")
+    cv2.imshow('Webcam',img) #showing the orignal size captured vc
+    cv2.waitKey(1)
+
+
+
+
+
+
